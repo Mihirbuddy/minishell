@@ -1,4 +1,5 @@
 #include "pipeline.hpp"
+#include "signals.hpp"
 
 #include "builtins.hpp"
 #include "redirection.hpp"
@@ -322,6 +323,7 @@ int executePipeline(
 
   pid_t childPids[MAX_PIPELINE_COMMANDS];
   int childrenCreated = 0;
+  pid_t pipelineProcessGroupId = -1;
 
   for (int index = 0; index < commandCount; index++)
   {
@@ -344,10 +346,36 @@ int executePipeline(
 
     if (childPid == 0)
     {
+
+      pid_t childProcessGroup;
+
+      if (index == 0)
+      {
+        /*
+         * The first child's PID becomes the process-group ID.
+         */
+        childProcessGroup = 0;
+      }
+      else
+      {
+        /*
+         * Later children join the first child's process group.
+         */
+        childProcessGroup = pipelineProcessGroupId;
+      }
+
+      if (setpgid(0, childProcessGroup) == -1)
+      {
+        perror("setpgid");
+        _exit(EXIT_FAILURE);
+      }
+
+      restoreDefaultSignalHandlers();
       /*
        * Every command except the first reads from the previous
        * pipe.
        */
+
       if (index > 0)
       {
         if (dup2(
@@ -414,6 +442,19 @@ int executePipeline(
       executePipelineCommand(executableCommand, shell);
     }
 
+    if (index == 0)
+    {
+      pipelineProcessGroupId = childPid;
+    }
+
+    if (setpgid(childPid, pipelineProcessGroupId) == -1)
+    {
+      if (errno != EACCES && errno != ESRCH)
+      {
+        perror("setpgid");
+      }
+    }
+
     childPids[index] = childPid;
     childrenCreated++;
   }
@@ -437,20 +478,47 @@ int executePipeline(
   /*
    * Wait for every process in the foreground pipeline.
    */
+
+  setForegroundProcessGroup(pipelineProcessGroupId);
+
+  bool pipelineStopped = false;
   for (int index = 0; index < commandCount; index++)
   {
     int status;
 
-    while (waitpid(childPids[index], &status, 0) == -1)
+    while (waitpid(
+               childPids[index],
+               &status,
+               WUNTRACED) == -1)
     {
       if (errno == EINTR)
       {
         continue;
       }
 
+      if (errno == ECHILD)
+      {
+        break;
+      }
+
       perror("waitpid");
+      clearForegroundProcessGroup();
       return -1;
     }
+
+    if (WIFSTOPPED(status))
+    {
+      pipelineStopped = true;
+    }
+  }
+
+  clearForegroundProcessGroup();
+
+  if (pipelineStopped)
+  {
+    printf(
+        "Pipeline %d stopped\n",
+        static_cast<int>(pipelineProcessGroupId));
   }
 
   return 0;

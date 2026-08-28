@@ -94,28 +94,26 @@ int executeExternalCommand(
     return -1;
   }
 
-  /*
-  see initially jab fork run hua to ek child process bana and ek parent process, chidl ki jo bhi new process id banegi vo parent ke childpid hogi and chilp ki childpid 0 hogi ,
-  now initally parent jo hai vo shell program chala raha hoga , so child jo banega usko bhi isi code ki ek copy milegi to run to child process bhi abhi shell hi execute kar raha hoga ,
-  */
-
   if (childPid == 0)
   {
     /*
-     * This block is executed by the child process.
+     * Create a new process group.
      *
-     * execvp() replaces the child process with the requested
-     * external program.
-     *
-     * arguments[0] is the command name.
-     *
-     * The 'p' in execvp means that PATH is searched for the
-     * executable.
+     * Because the group ID is 0, the child's own PID becomes
+     * its process-group ID.
      */
+    if (setpgid(0, 0) == -1)
+    {
+      perror("setpgid");
+      _exit(EXIT_FAILURE);
+    }
 
-    /*now because child has childpid as 0 it has entered the loop and execvp will give it new task stored in arguments[0]
-    see if execvp is successfull it does not return anything , it only returns when it fails
-    */
+    /*
+     * The shell handles Ctrl+C and Ctrl+Z specially, but the
+     * external program must use their normal default behaviour.
+     */
+    restoreDefaultSignalHandlers();
+
     SavedFileDescriptors unusedDescriptors;
 
     if (!applyRedirections(
@@ -128,47 +126,66 @@ int executeExternalCommand(
 
     execvp(arguments[0], arguments);
 
-    /*now don't confuse that even if execvp succeded we are still writing the perror ,
-    see ye jo bhi code hai vo child process me jaega hi nahi , like jaisi hi hamne execvp karke child process ko ls vala task diya , to ab usme ls ka code aagaya , ye code hai hi nahi , ab vo ls ka code hi execute kar raha hoga ,
-    but agar vo fail hua  to it returns to parent which has this code only */
     perror(arguments[0]);
-
-    /*
-     * Use _exit() inside the child after fork().
-     *
-     * Unlike exit(), _exit() does not flush copied parent
-     * I/O buffers or run parent cleanup handlers.
-     */
     _exit(EXIT_FAILURE);
   }
 
   /*
-   * This block is executed by the parent shell.
+   * The parent also calls setpgid() to avoid a race where the
+   * child has not set its group before a signal arrives.
    */
+  if (setpgid(childPid, childPid) == -1)
+  {
+    /*
+     * EACCES can occur if the child executed execvp() before
+     * the parent reached setpgid(). In that case, the child may
+     * already have set its process group successfully.
+     */
+    if (errno != EACCES && errno != ESRCH)
+    {
+      perror("setpgid");
+    }
+  }
+
   if (background)
   {
     printf("[%d]\n", static_cast<int>(childPid));
     return 0;
   }
 
+  /*
+   * Ctrl+C and Ctrl+Z should now be forwarded to this group.
+   */
+  setForegroundProcessGroup(childPid);
+
   int status;
 
-  /*
-   * Wait only for the foreground child that we just created.
-   */
-  while (waitpid(childPid, &status, 0) == -1)
+  while (waitpid(
+             childPid,
+             &status,
+             WUNTRACED) == -1)
   {
-    /*
-     * waitpid() may be interrupted by a signal. In that case,
-     * call it again.
-     */
     if (errno == EINTR)
     {
       continue;
     }
 
     perror("waitpid");
+    clearForegroundProcessGroup();
     return -1;
+  }
+
+  /*
+   * The process either terminated or stopped, so it is no longer
+   * the shell's foreground process.
+   */
+  clearForegroundProcessGroup();
+
+  if (WIFSTOPPED(status))
+  {
+    printf(
+        "Process %d stopped\n",
+        static_cast<int>(childPid));
   }
 
   return 0;

@@ -7,6 +7,7 @@
 
 
 #include <cstdio>
+#include <cerrno>
 #include <cstring>
 #include <unistd.h>
 
@@ -82,6 +83,11 @@ void Shell::run()
         stop();
         break;
       }
+
+      if (errno == EINTR) {
+        clearerr(stdin);
+        continue;
+    }
 
       perror("fgets");
       clearerr(stdin);

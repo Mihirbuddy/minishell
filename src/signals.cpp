@@ -15,6 +15,10 @@ static volatile sig_atomic_t foregroundProcessGroupId = -1;
 
 static void handleForegroundSignal(int signalNumber)
 {
+
+  const char newline = '\n';
+  write(STDOUT_FILENO, &newline, 1);
+
   if (foregroundProcessGroupId <= 0)
   {
     /*
@@ -57,7 +61,7 @@ bool initializeSignalHandlers()
    * Restart interrupted calls such as fgets() when Ctrl+C or
    * Ctrl+Z is pressed while no foreground command exists.
    */
-  action.sa_flags = SA_RESTART;
+  action.sa_flags = 0;
 
   if (sigaction(SIGINT, &action, NULL) == -1)
   {

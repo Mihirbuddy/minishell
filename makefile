@@ -11,7 +11,8 @@ SOURCES = src/main.cpp \
           src/executor.cpp \
           src/ls.cpp \
           src/redirection.cpp \
-          src/pipeline.cpp
+          src/pipeline.cpp \
+          src/signals.cpp
 
 OBJECTS = $(SOURCES:.cpp=.o)
 

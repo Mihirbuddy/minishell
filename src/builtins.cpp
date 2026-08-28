@@ -1,15 +1,29 @@
 #include "builtins.hpp"
+#include "history.hpp"
 #include "parser.hpp"
 #include "shell.hpp"
 #include "ls.hpp"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <limits.h>
 #include <unistd.h>
 
 #define COMMAND_BUFFER_SIZE 4096
 #define ARGUMENT_BUFFER_SIZE 4096
+
+static const char *BUILTIN_COMMANDS[] = {
+    "cd",
+    "pwd",
+    "echo",
+    "ls",
+    "history",
+    "exit"};
+
+static const int BUILTIN_COMMAND_COUNT =
+    sizeof(BUILTIN_COMMANDS) /
+    sizeof(BUILTIN_COMMANDS[0]);
 
 static int executePwd()
 {
@@ -63,6 +77,75 @@ static void removeOuterQuotes(char *text)
    * Place '\0' immediately after the content.
    */
   text[length - 2] = '\0';
+}
+
+static int executeHistory(char *command)
+{
+  if (command == NULL)
+  {
+    return -1;
+  }
+
+  char commandCopy[COMMAND_BUFFER_SIZE];
+
+  if (strlen(command) >= sizeof(commandCopy))
+  {
+    fprintf(stderr, "history: command is too long\n");
+    return -1;
+  }
+
+  strcpy(commandCopy, command);
+
+  /*
+   * Skip the word "history".
+   */
+  char *commandName = strtok(commandCopy, " \t");
+
+  if (commandName == NULL)
+  {
+    return -1;
+  }
+
+  char *numberArgument = strtok(NULL, " \t");
+  char *extraArgument = strtok(NULL, " \t");
+
+  if (extraArgument != NULL)
+  {
+    fprintf(stderr, "history: Invalid arguments\n");
+    return -1;
+  }
+
+  /*
+   * history without an argument displays at most 10 commands.
+   */
+  if (numberArgument == NULL)
+  {
+    printHistory(10);
+    return 0;
+  }
+
+  char *invalidCharacter = NULL;
+
+  long requestedCount = strtol(
+      numberArgument,
+      &invalidCharacter,
+      10);
+
+  if (invalidCharacter == numberArgument ||
+      *invalidCharacter != '\0' ||
+      requestedCount <= 0 ||
+      requestedCount > 20)
+  {
+    fprintf(
+        stderr,
+        "history: count must be between 1 and 20\n");
+
+    return -1;
+  }
+
+  printHistory(static_cast<int>(requestedCount));
+
+  return 0;
 }
 
 static int executeEcho(char *command)
@@ -356,11 +439,34 @@ bool isBuiltinCommand(const char *commandName)
     return false;
   }
 
-  return strcmp(commandName, "cd") == 0 ||
-         strcmp(commandName, "pwd") == 0 ||
-         strcmp(commandName, "echo") == 0 ||
-         strcmp(commandName, "ls") == 0 ||
-         strcmp(commandName, "exit") == 0;
+  for (int index = 0;
+       index < BUILTIN_COMMAND_COUNT;
+       index++)
+  {
+    if (strcmp(
+            commandName,
+            BUILTIN_COMMANDS[index]) == 0)
+    {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+int getBuiltinCommandCount()
+{
+  return BUILTIN_COMMAND_COUNT;
+}
+
+const char *getBuiltinCommandName(int index)
+{
+  if (index < 0 || index >= BUILTIN_COMMAND_COUNT)
+  {
+    return NULL;
+  }
+
+  return BUILTIN_COMMANDS[index];
 }
 
 int executeBuiltinCommand(char *command, Shell &shell)
@@ -423,6 +529,11 @@ int executeBuiltinCommand(char *command, Shell &shell)
   if (strcmp(commandName, "echo") == 0)
   {
     return executeEcho(command);
+  }
+
+  if (strcmp(commandName, "history") == 0)
+  {
+    return executeHistory(command);
   }
 
   if (strcmp(commandName, "ls") == 0)

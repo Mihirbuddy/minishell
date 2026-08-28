@@ -4,7 +4,9 @@
 #include "prompt.hpp"
 #include "executor.hpp"
 #include "signals.hpp"
+#include "history.hpp"
 
+#include "input.hpp"
 
 #include <cstdio>
 #include <cerrno>
@@ -50,77 +52,61 @@ When successful, it returns the address of the destination buffer.
   previousDirectory[sizeof(previousDirectory) - 1] = '\0';
 
   shellPid = getpid();
-  if (!initializeSignalHandlers()) {
+
+  if (!initializeHistory(homeDirectory)) {
     return false;
 }
+
+  if (!initializeSignalHandlers())
+  {
+    return false;
+  }
 
   running = true;
 
   return true;
 }
 
-void Shell::run()
-{
-  char input[INPUT_BUFFER_SIZE];
+void Shell::run() {
+    char input[INPUT_BUFFER_SIZE];
 
-  while (running)
-  {
-    reapBackgroundProcesses();
-    displayPrompt(homeDirectory);
+    while (running) {
+        reapBackgroundProcesses();
 
-    if (fgets(input, sizeof(input), stdin) == NULL)
-    {
-      /*
-       * fgets() returning NULL can mean:
-       *
-       * 1. EOF was received, such as Ctrl+D.
-       * 2. An input error occurred.
-       */
+        displayPrompt(homeDirectory);
 
-      if (feof(stdin))
-      {
-        printf("\n");
-        stop();
-        break;
-      }
+        int inputResult = readInputLine(
+            input,
+            sizeof(input),
+            homeDirectory
+        );
 
-      if (errno == EINTR) {
-        clearerr(stdin);
-        continue;
+        if (inputResult == INPUT_EOF) {
+            stop();
+            break;
+        }
+
+        if (inputResult == INPUT_INTERRUPTED) {
+            continue;
+        }
+
+        if (inputResult == INPUT_ERROR) {
+            continue;
+        }
+
+        /*
+         * Store the entire entered line before execution.
+         *
+         * Therefore, the history command itself appears in the
+         * output, as required by the assignment.
+         */
+        if (!addHistoryCommand(input)) {
+            fprintf(stderr, "Failed to save command history\n");
+        }
+
+        parseInput(input, *this);
     }
-
-      perror("fgets");
-      clearerr(stdin);
-      continue;
-    }
-
-    /*
-     * If the input completely filled the buffer and did not contain
-     * a newline, discard the remaining characters from that line.
-     */
-    if (strchr(input, '\n') == NULL)
-    {
-      int character;
-
-      while ((character = getchar()) != '\n' &&
-             character != EOF)
-      {
-        // Discard the remaining input.
-      }
-
-      fprintf(stderr, "Input is too long\n");
-      continue;
-    }
-
-    /*
-     * Remove the newline placed in the buffer by fgets().
-     */
-    input[strcspn(input, "\n")] = '\0';
-
-    parseInput(input, *this);
-  }
 }
-
 void Shell::stop()
 {
   running = false;

@@ -305,3 +305,101 @@ The shell currently handles:
 Most functionality can be developed on macOS, but Linux-specific commands that use files such as `/proc/<pid>/stat`, `/proc/<pid>/status`, or `/proc/<pid>/exe` must be implemented and tested on Linux.
 
 Recommended final testing environments include Ubuntu, the IIIT Hyderabad lab system, or another Linux environment.
+
+
+### Phase 8: TAB-Based Autocomplete
+
+Implemented interactive autocomplete triggered by the Tab key.
+
+Supported completion types:
+
+* Built-in shell commands
+* Executable commands available through `PATH`
+* Files in the current working directory
+* Directories in the current working directory
+* Commands appearing after `;` and `|`
+* Hidden files when the entered prefix begins with `.`
+
+Examples:
+
+```bash
+ec<TAB>
+```
+
+completes to:
+
+```bash
+echo
+```
+
+If the current directory contains `alpha.txt` and `alnum.txt`:
+
+```bash
+cat a<TAB>
+```
+
+fills the common prefix:
+
+```bash
+cat al
+```
+
+Pressing Tab again displays all matching entries while preserving the current command line.
+
+For a single directory match, `/` is appended automatically so the user can continue entering the path.
+
+The input system uses `termios` and character-by-character input instead of `fgets()`, allowing the shell to respond immediately to Tab, Backspace, `Ctrl+C`, `Ctrl+Z`, and `Ctrl+D`.
+
+Autocomplete scans:
+
+* The shell’s built-in command list
+* Executable files in directories listed under `PATH`
+* Files and directories in the current working directory
+
+Duplicate command suggestions are removed, multiple matches are sorted alphabetically, and the terminal prompt is redrawn without losing the partially entered command.
+
+### Phase 9: Persistent Command History
+
+Implemented command-history storage and interactive navigation across shell sessions.
+
+Features:
+
+* Stores a maximum of 20 commands
+* Overwrites the oldest entry when the limit is exceeded
+* Persists history across multiple shell sessions
+* Stores complete input lines before their execution
+* Supports editing and executing recalled commands
+
+Supported commands:
+
+```bash
+history
+history <num>
+```
+
+`history` displays up to the latest 10 commands, while `history <num>` displays the requested number of recent commands up to the 20-command storage limit.
+
+Example:
+
+```bash
+history
+history 5
+history 20
+```
+
+History is stored persistently in:
+
+```text
+<shell-home>/.mihirshell_history
+```
+
+Arrow-key navigation is also supported:
+
+* Up Arrow moves toward older commands.
+* Repeated Up Arrow stops at the oldest stored command.
+* Down Arrow moves toward newer commands after history navigation begins.
+* Moving beyond the latest entry restores the input originally typed before pressing Up.
+* Recalled commands can be modified using Backspace or additional input before execution.
+
+The input line is redrawn after navigation without losing the dynamic shell prompt. Empty input is not stored, while commands such as `history` and `exit` are recorded as regular history entries.
+

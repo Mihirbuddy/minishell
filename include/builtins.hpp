@@ -18,4 +18,7 @@ bool isBuiltinCommand(const char *commandName);
  */
 int executeBuiltinCommand(char *command, Shell &shell);
 
+int getBuiltinCommandCount();
+const char *getBuiltinCommandName(int index);
+
 #endif

@@ -1,0 +1,7 @@
+-rw-r--r-- 1 mihirpradhan staff 0 Aug 26 13:40 README.md
+-rwxr-xr-x 1 mihirpradhan staff 55352 Aug 28 16:47 a.out
+-rw-r--r-- 1 mihirpradhan staff 114 Aug 28 16:49 files.txt
+drwxr-xr-x 9 mihirpradhan staff 288 Aug 28 16:42 include
+-rw-r--r-- 1 mihirpradhan staff 483 Aug 28 16:47 makefile
+-rw-r--r-- 1 mihirpradhan staff 13 Aug 28 16:49 output.txt
+drwxr-xr-x 18 mihirpradhan staff 576 Aug 28 16:47 src

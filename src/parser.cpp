@@ -3,6 +3,9 @@
 #include "executor.hpp"
 #include "shell.hpp"
 
+#include "redirection.hpp"
+#include "pipeline.hpp"
+
 #include <cstdio>
 #include <cstring>
 
@@ -205,67 +208,79 @@ static bool containsInvalidAmpersand(const char *command)
   return false;
 }
 
-static void processSingleCommand(char *command, Shell &shell)
-{
+static void processSingleCommand(char* command, Shell& shell) {
+    char* cleanedCommand = trimWhitespace(command);
 
-  // isn't this unnecessary because we are already trimming the whitespace in parseInput function, but still we are doing it here again
-  char *cleanedCommand = trimWhitespace(command);
+    if (cleanedCommand == NULL || cleanedCommand[0] == '\0') {
+        return;
+    }
 
-  if (cleanedCommand == NULL || cleanedCommand[0] == '\0')
-  {
-    return;
-  }
+    if (containsInvalidAmpersand(cleanedCommand)) {
+        fprintf(stderr, "Invalid use of background operator\n");
+        return;
+    }
 
-  /*
-   * Check the background operator before modifying the command.
-   */
-  if (containsInvalidAmpersand(cleanedCommand))
-  {
-    fprintf(stderr, "Invalid use of background operator\n");
-    return;
-  }
+    bool background = extractBackgroundSymbol(cleanedCommand);
 
-  bool background = extractBackgroundSymbol(cleanedCommand);
+    cleanedCommand = trimWhitespace(cleanedCommand);
 
-  cleanedCommand = trimWhitespace(cleanedCommand);
+    if (cleanedCommand == NULL || cleanedCommand[0] == '\0') {
+        fprintf(stderr, "Invalid command before '&'\n");
+        return;
+    }
 
-  /*
-   * Input containing only '&' is invalid.
-   */
-
-  // this code can also be removed and can be written in the abotu extractBackgroundSymbol function itself, or containsInvalidAmpersand funtion
-  if (cleanedCommand == NULL || cleanedCommand[0] == '\0')
-  {
-    fprintf(stderr, "Invalid command before '&'\n");
-    return;
-  }
-
-  char commandName[MAX_COMMAND_LENGTH];
-
-  if (!getCommandName(
-          cleanedCommand,
-          commandName,
-          sizeof(commandName)))
-  {
-    return;
-  }
-
-  if (isBuiltinCommand(commandName))
-  {
     /*
-     * Background execution is not required for internal commands.
-     *
-     * Therefore:
-     *
-     *     pwd &
-     *
-     * executes pwd normally in the parent shell.
+     * Pipelines have their own execution path because every command
+     * in the pipeline must run in a separate child process.
      */
-    executeBuiltinCommand(cleanedCommand, shell);
-    return;
-  }
+    if (strchr(cleanedCommand, '|') != NULL) {
+        executePipeline(cleanedCommand, background, shell);
+        return;
+    }
 
-  executeExternalCommand(cleanedCommand, background);
+    char executableCommand[MAX_COMMAND_LENGTH];
+    RedirectionInfo redirection;
+
+    if (!parseRedirections(
+            cleanedCommand,
+            executableCommand,
+            sizeof(executableCommand),
+            redirection)) {
+        return;
+    }
+
+    char commandName[MAX_COMMAND_LENGTH];
+
+    if (!getCommandName(
+            executableCommand,
+            commandName,
+            sizeof(commandName))) {
+        return;
+    }
+
+    if (isBuiltinCommand(commandName)) {
+        SavedFileDescriptors savedDescriptors;
+
+        if (!applyRedirections(
+                redirection,
+                true,
+                savedDescriptors)) {
+            return;
+        }
+
+        executeBuiltinCommand(executableCommand, shell);
+
+        fflush(stdout);
+        restoreRedirections(savedDescriptors);
+
+        return;
+    }
+
+    executeExternalCommand(
+        executableCommand,
+        background,
+        redirection
+    );
 }
 
 void parseInput(char *input, Shell &shell)

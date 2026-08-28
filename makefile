@@ -9,7 +9,9 @@ SOURCES = src/main.cpp \
           src/parser.cpp \
           src/builtins.cpp \
           src/executor.cpp \
-          src/ls.cpp
+          src/ls.cpp \
+          src/redirection.cpp \
+          src/pipeline.cpp
 
 OBJECTS = $(SOURCES:.cpp=.o)
 

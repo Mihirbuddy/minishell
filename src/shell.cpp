@@ -1,7 +1,10 @@
 #include "shell.hpp"
+
 #include "parser.hpp"
 #include "prompt.hpp"
 #include "executor.hpp"
+#include "signals.hpp"
+
 
 #include <cstdio>
 #include <cstring>
@@ -46,6 +49,10 @@ When successful, it returns the address of the destination buffer.
   previousDirectory[sizeof(previousDirectory) - 1] = '\0';
 
   shellPid = getpid();
+  if (!initializeSignalHandlers()) {
+    return false;
+}
+
   running = true;
 
   return true;

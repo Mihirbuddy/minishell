@@ -3,24 +3,22 @@
 
 #include <sys/types.h>
 
-/*
- * Install Ctrl+C and Ctrl+Z handlers for the shell.
- */
 bool initializeSignalHandlers();
 
-/*
- * Restore normal signal behaviour inside a child process.
- */
 void restoreDefaultSignalHandlers();
 
-/*
- * Record the process group currently running in the foreground.
- */
 void setForegroundProcessGroup(pid_t processGroupId);
 
-/*
- * The shell no longer has a foreground process group.
- */
 void clearForegroundProcessGroup();
+
+/*
+ * Give terminal control to a foreground command or pipeline.
+ */
+void giveTerminalTo(pid_t processGroupId);
+
+/*
+ * Return terminal control to the custom shell.
+ */
+void takeTerminalBack();
 
 #endif

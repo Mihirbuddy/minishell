@@ -25,27 +25,13 @@ static int createArgumentArray(char *command,
 
   int argumentCount = 0;
 
-  /*
-   * Separate the command using spaces and tabs.
-   *
-   * Example:
-   *
-   * ls -l src
-   *
-   * becomes:
-   *
-   * arguments[0] = "ls"
-   * arguments[1] = "-l"
-   * arguments[2] = "src"
-   * arguments[3] = NULL
-   */
   char *token = strtok(command, " \t");
 
   while (token != NULL)
   {
     /*
-     * One position must remain available for NULL because
-     * execvp() requires a NULL-terminated argument array.
+     * Keep one final position for the NULL pointer required
+     * by execvp().
      */
     if (argumentCount >= maximumArguments - 1)
     {
@@ -97,10 +83,9 @@ int executeExternalCommand(
   if (childPid == 0)
   {
     /*
-     * Create a new process group.
+     * Place the child in its own process group.
      *
-     * Because the group ID is 0, the child's own PID becomes
-     * its process-group ID.
+     * Its PID becomes its process-group ID.
      */
     if (setpgid(0, 0) == -1)
     {
@@ -109,8 +94,7 @@ int executeExternalCommand(
     }
 
     /*
-     * The shell handles Ctrl+C and Ctrl+Z specially, but the
-     * external program must use their normal default behaviour.
+     * External programs should use normal signal behaviour.
      */
     restoreDefaultSignalHandlers();
 
@@ -124,39 +108,54 @@ int executeExternalCommand(
       _exit(EXIT_FAILURE);
     }
 
+    /*
+     * Replace the child process with the requested external
+     * program.
+     */
     execvp(arguments[0], arguments);
 
+    /*
+     * execvp() returns only when execution fails.
+     */
     perror(arguments[0]);
     _exit(EXIT_FAILURE);
   }
 
   /*
-   * The parent also calls setpgid() to avoid a race where the
-   * child has not set its group before a signal arrives.
+   * The parent also places the child in its own process group.
+   * This prevents a timing race with the child.
    */
   if (setpgid(childPid, childPid) == -1)
   {
-    /*
-     * EACCES can occur if the child executed execvp() before
-     * the parent reached setpgid(). In that case, the child may
-     * already have set its process group successfully.
-     */
     if (errno != EACCES && errno != ESRCH)
     {
       perror("setpgid");
     }
   }
 
+  /*
+   * Background commands do not receive terminal control.
+   */
   if (background)
   {
-    printf("[%d]\n", static_cast<int>(childPid));
+    printf(
+        "[%d]\n",
+        static_cast<int>(childPid));
+
     return 0;
   }
 
   /*
-   * Ctrl+C and Ctrl+Z should now be forwarded to this group.
+   * Record this process group as the foreground job.
    */
   setForegroundProcessGroup(childPid);
+
+  /*
+   * Give keyboard and terminal control to the foreground
+   * program. This is required by interactive programs such
+   * as vi and emacs.
+   */
+  giveTerminalTo(childPid);
 
   int status;
 
@@ -171,21 +170,39 @@ int executeExternalCommand(
     }
 
     perror("waitpid");
+
+    /*
+     * Ensure the custom shell gets terminal control back even
+     * if waitpid() fails.
+     */
     clearForegroundProcessGroup();
+    takeTerminalBack();
+
     return -1;
   }
 
   /*
-   * The process either terminated or stopped, so it is no longer
-   * the shell's foreground process.
+   * The foreground program has either completed or stopped.
    */
   clearForegroundProcessGroup();
+
+  /*
+   * Return keyboard and terminal control to the custom shell.
+   */
+  takeTerminalBack();
 
   if (WIFSTOPPED(status))
   {
     printf(
-        "Process %d stopped\n",
+        "\nProcess %d stopped\n",
         static_cast<int>(childPid));
+  }
+  else if (WIFSIGNALED(status))
+  {
+    /*
+     * Move the prompt to a new line after Ctrl+C.
+     */
+    printf("\n");
   }
 
   return 0;
@@ -194,28 +211,14 @@ int executeExternalCommand(
 void reapBackgroundProcesses()
 {
   int status;
-
-  /*status is one integer, but its different bits encode different pieces of information.
-  The operating system uses some bits to record:
-
-How the child terminated
-The child’s exit code
-The terminating signal, if any
-Whether the child was stopped or continued
-
-waitpid() writes this encoded value into status:
-The macros decode the relevant bits.*/
   pid_t completedPid;
 
   /*
-   * WNOHANG means:
-   *
-   * Return immediately if no background process has completed.
-   *
-   * Calling waitpid() repeatedly ensures that all completed
-   * background children are reaped.
+   * WNOHANG prevents the shell from waiting when no background
+   * process has completed.
    */
-  while ((completedPid = waitpid(-1, &status, WNOHANG)) > 0)
+  while ((completedPid =
+              waitpid(-1, &status, WNOHANG)) > 0)
   {
     printf(
         "\nBackground process %d finished\n",
@@ -223,14 +226,8 @@ The macros decode the relevant bits.*/
   }
 
   /*
-   * completedPid == 0:
-   *     Child processes exist, but none have completed.
-   *
-   * completedPid == -1:
-   *     No child is currently waiting to be reaped, or an error
-   *     occurred.
-   *
-   * ECHILD is normal when the shell has no child processes.
+   * ECHILD simply means there are no child processes waiting
+   * to be collected.
    */
   if (completedPid == -1 && errno != ECHILD)
   {

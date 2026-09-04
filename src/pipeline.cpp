@@ -480,8 +480,9 @@ int executePipeline(
    */
 
   setForegroundProcessGroup(pipelineProcessGroupId);
+giveTerminalTo(pipelineProcessGroupId);
 
-  bool pipelineStopped = false;
+bool pipelineStopped = false;
   for (int index = 0; index < commandCount; index++)
   {
     int status;
@@ -503,6 +504,7 @@ int executePipeline(
 
       perror("waitpid");
       clearForegroundProcessGroup();
+      takeTerminalBack();
       return -1;
     }
 
@@ -513,6 +515,9 @@ int executePipeline(
   }
 
   clearForegroundProcessGroup();
+takeTerminalBack();
+
+
 
   if (pipelineStopped)
   {

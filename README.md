@@ -1,254 +1,77 @@
-# MihirShell – Custom UNIX Shell
-
-## Overview
-
-MihirShell is a modular UNIX-style command-line shell developed in C++ as part of the Advanced Operating Systems assignment.
-
-The shell currently supports built-in and external commands, foreground/background execution, I/O redirection, multi-stage pipelines, semicolon-separated commands, and basic signal handling.
-
-The implementation does not use STL containers, the C++ `filesystem` library, `system()`, `popen()`, `pclose()`, or ncurses.
-
-## Implemented Phases
-
-### Phase 1: Shell Foundation
-
-Implemented the basic shell structure and interactive input loop.
-
-Features:
-
-* Modular header and source-file structure
-* Dynamic `<username@hostname:path>` prompt
-* Shell home-directory tracking using `~`
-* Input handling using fixed-size character arrays
-* Leading and trailing whitespace removal
-* Semicolon-separated command parsing
-* `exit` command
-* `Ctrl+D` handling
-* Overly long input detection
-* Makefile-based compilation
-
-Example:
-
-```bash
-echo hello ; pwd ; exit
-```
-
-### Phase 2: Basic Built-in Commands
-
-Implemented commands that execute directly inside the shell process.
-
-Commands:
-
-* `cd`
-* `pwd`
-* `echo`
-* `exit`
-
-Supported `cd` forms:
-
-```bash
-cd
-cd .
-cd ..
-cd -
-cd ~
-cd ~/directory
-```
-
-The shell maintains its starting directory as its custom home and stores the previous directory without using the `PWD` or `OLDPWD` environment variables.
-
-### Phase 3: External Command Execution
-
-Added execution of commands not implemented as shell built-ins.
-
-Features:
-
-* Child-process creation using `fork()`
-* External program execution using `execvp()`
-* Foreground execution using `waitpid()`
-* Background execution using `&`
-* Basic cleanup of completed background processes
-* Error handling for unavailable commands
-* Support for launching another instance of the shell
-
-Examples:
-
-```bash
-date
-uname
-sleep 5
-sleep 5 &
-./a.out
-```
-
-### Phase 4: Custom `ls` Command
-
-Implemented `ls` internally without executing the system’s `/bin/ls`.
-
-Supported forms:
-
-```bash
-ls
-ls -a
-ls -l
-ls -la
-ls -al
-ls <path>
-ls -l <path>
-ls <path1> <path2>
-```
-
-Implementation uses:
-
-* `opendir()`
-* `readdir()`
-* `closedir()`
-* `lstat()`
-* `readlink()`
-* `getpwuid()`
-* `getgrgid()`
-
-The long format displays file type, permissions, link count, owner, group, size, modification time, filename, and symbolic-link target.
-
-### Phase 5: I/O Redirection
-
-Implemented input, output, and append redirection.
-
-Supported operators:
-
-```text
-<    Input redirection
->    Output redirection with overwrite
->>   Output redirection with append
-```
-
-Examples:
-
-```bash
-cat < input.txt
-echo hello > output.txt
-echo world >> output.txt
-sort < input.txt > sorted.txt
-ls -l > files.txt
-```
-
-Redirection works with both built-in and external commands.
-
-The implementation uses:
-
-* `open()`
-* `dup()`
-* `dup2()`
-* `close()`
-
-For parent-executed built-ins, the shell saves and restores its original standard input and output descriptors after execution.
-
-### Phase 6: Multi-stage Pipelines
-
-Implemented pipelines containing two or more commands.
-
-Examples:
-
-```bash
-echo hello | wc -c
-cat input.txt | grep hello
-cat input.txt | sort | uniq
-cat < input.txt | sort | uniq > output.txt
-```
-
-Features:
-
-* Multiple commands connected through pipes
-* Concurrent execution of pipeline stages
-* Built-in commands inside pipelines
-* External commands inside pipelines
-* Redirection combined with pipelines
-* Optional background pipeline execution
-* Validation of missing pipeline commands
-
-Each pipeline stage runs in a separate child process. All unused pipe descriptors are closed to ensure that reading processes receive EOF correctly.
-
-### Phase 7: Simple Signal Handling
-
-Implemented the required terminal signals.
-
-#### `Ctrl+C`
-
-* Sends `SIGINT` to the currently running foreground command
-* Interrupts the complete foreground pipeline
-* Does not terminate the custom shell
-* Has no effect on the shell when no foreground process is running
-
-#### `Ctrl+Z`
-
-* Sends `SIGTSTP` to the currently running foreground command
-* Stops the complete foreground pipeline
-* Returns control to the custom shell
-* Has no effect on the shell when no foreground process is running
-
-#### `Ctrl+D`
-
-* Logs out of the custom shell using EOF handling
-* Does not close or affect the actual terminal
-
-Foreground commands and pipeline stages are assigned process groups so signals can be delivered to the complete foreground job.
-
-## Current Built-in Commands
-
-```text
-cd
-pwd
-echo
-ls
-exit
-```
-
-Additional assignment-specific commands will be added in later phases.
-
-## Current Project Structure
-
-```text
-2026201019_assignment2/
-├── README.md
-├── makefile
-├── include/
-│   ├── builtins.hpp
-│   ├── executor.hpp
-│   ├── ls.hpp
-│   ├── parser.hpp
-│   ├── pipeline.hpp
-│   ├── prompt.hpp
-│   ├── redirection.hpp
-│   ├── shell.hpp
-│   └── signals.hpp
-└── src/
-    ├── builtins.cpp
-    ├── executor.cpp
-    ├── ls.cpp
-    ├── main.cpp
-    ├── parser.cpp
-    ├── pipeline.cpp
-    ├── prompt.cpp
-    ├── redirection.cpp
-    ├── shell.cpp
-    └── signals.cpp
-```
-
-## Compilation
-
-From the project directory:
+# UNIX Shell
+
+## Project Overview
+
+This project implements a user-defined interactive UNIX shell in C++. It reads commands from the user, validates and parses them, executes built-in or external commands, and displays the prompt again after execution.
+
+The shell supports command sequencing, foreground and background processes, pipelines, I/O redirection, signal handling, autocomplete, and persistent command history. The implementation is modular and does not use STL, `filesystem`, `system()`, `popen()`, `pclose()`, or ncurses.
+
+The directory from which the shell is launched is treated as its home directory and is displayed as `~` in the prompt.
+
+## Implemented Features
+
+- Dynamic prompt containing the username, hostname, and current directory
+- Semicolon-separated command execution
+- Spaces and tabs between commands and arguments
+- Foreground and background process execution
+- Input redirection using `<`
+- Output redirection using `>` and `>>`
+- Pipelines containing any number of commands
+- Redirection within pipelines
+- `Ctrl+C`, `Ctrl+Z`, and `Ctrl+D` handling
+- Command and file/directory autocomplete using `Tab`
+- Persistent history of the latest 20 commands
+- History navigation using the Up and Down arrow keys
+- Background-child cleanup to prevent zombie processes
+
+## Implemented Commands
+
+The following commands are implemented directly by the shell:
+
+- `cd`: Changes the current directory. It supports `.`, `..`, `-`, `~`, and no argument.
+- `pwd`: Prints the absolute path of the current directory.
+- `echo`: Prints the supplied text while handling spaces and tabs.
+- `ls`: Lists files and directories. It supports `-a`, `-l`, combined flags, files, and multiple directory arguments.
+- `search`: Recursively searches for a file or directory below the current directory.
+- `pinfo`: Displays process status, virtual memory, and executable path on Linux.
+- `history`: Displays recent commands; `history <num>` displays the requested number.
+- `exit`: Terminates the custom shell.
+
+Commands that are not implemented internally, such as `cat`, `grep`, `sort`, `sleep`, `vi`, and user-created executables, are executed as external system commands.
+
+## Important System Calls
+
+- `fork()`: Creates a child process for an external command or pipeline stage.
+- `execvp()`: Replaces a child process with the requested external program.
+- `waitpid()`: Waits for foreground processes and collects completed child processes.
+- `pipe()`: Creates a communication channel between pipeline commands.
+- `dup()` and `dup2()`: Save, replace, and restore standard input/output file descriptors.
+- `open()` and `close()`: Open redirection files and close unused file descriptors.
+- `chdir()` and `getcwd()`: Change and obtain the current working directory.
+- `opendir()`, `readdir()`, and `stat()`: Read directories and obtain file information.
+- `sigaction()` and `kill()`: Install signal handlers and deliver signals to foreground processes.
+- `setpgid()` and `tcsetpgrp()`: Manage process groups and terminal access.
+
+## Execution Flow
+
+1. The shell initializes its home directory, history, terminal settings, and signal handlers.
+2. It displays the prompt and reads a command line.
+3. The input is stored in history and separated into commands using `;`.
+4. Each command is parsed for background execution, pipelines, redirection, arguments, and flags.
+5. Built-in commands are executed by the shell. External commands are executed in child processes using `fork()` and `execvp()`.
+6. The parent waits for foreground processes but immediately displays the prompt for background processes.
+7. The shell displays a new prompt and waits for further input.
+
+## Compilation and Execution
+
+Run these commands from the project directory:
 
 ```bash
 make
-```
-
-## Execution
-
-```bash
 ./a.out
 ```
 
-## Clean Build
+To clean and rebuild the project:
 
 ```bash
 make clean
@@ -256,150 +79,110 @@ make
 ./a.out
 ```
 
-## Example Commands
+`pinfo` must be tested on Linux because it reads process information from `/proc`.
+
+## Sample Test Cases
+
+### Built-in commands
 
 ```bash
-pwd
-cd src
 echo hello world
-ls -la
-date
-sleep 10 &
-echo hello > output.txt
-cat < output.txt
-cat file.txt | grep hello | wc -l
-cat < input.txt | sort | uniq > output.txt
-pwd ; ls ; echo completed
+pwd
+search README.md
 ```
 
-## Error Handling
-
-The shell currently handles:
-
-* Invalid command names
-* Unsupported built-in arguments
-* Invalid `ls` flags
-* Missing files and directories
-* Excessively long input and commands
-* Invalid background operator placement
-* Missing redirection filenames
-* Multiple conflicting redirections
-* Invalid or empty pipeline stages
-* Failures from `fork()`, `execvp()`, `pipe()`, `open()`, `dup()`, `dup2()`, `waitpid()`, and directory-related system calls
-
-## Constraints Followed
-
-* Implemented only in C++
-* No STL containers
-* No C++ `filesystem` library
-* No `system()`
-* No `popen()` or `pclose()`
-* No curses or ncurses
-* No use of `PWD` or `OLDPWD`
-* External programs execute through the `exec` family
-* Pipes use the `pipe()` system call
-* Errors are handled using return values, `perror()`, and appropriate messages
-
-## Platform Note
-
-Most functionality can be developed on macOS, but Linux-specific commands that use files such as `/proc/<pid>/stat`, `/proc/<pid>/status`, or `/proc/<pid>/exe` must be implemented and tested on Linux.
-
-Recommended final testing environments include Ubuntu, the IIIT Hyderabad lab system, or another Linux environment.
-
-
-### Phase 8: TAB-Based Autocomplete
-
-Implemented interactive autocomplete triggered by the Tab key.
-
-Supported completion types:
-
-* Built-in shell commands
-* Executable commands available through `PATH`
-* Files in the current working directory
-* Directories in the current working directory
-* Commands appearing after `;` and `|`
-* Hidden files when the entered prefix begins with `.`
-
-Examples:
-
-```bash
-ec<TAB>
-```
-
-completes to:
-
-```bash
-echo
-```
-
-If the current directory contains `alpha.txt` and `alnum.txt`:
-
-```bash
-cat a<TAB>
-```
-
-fills the common prefix:
-
-```bash
-cat al
-```
-
-Pressing Tab again displays all matching entries while preserving the current command line.
-
-For a single directory match, `/` is appended automatically so the user can continue entering the path.
-
-The input system uses `termios` and character-by-character input instead of `fgets()`, allowing the shell to respond immediately to Tab, Backspace, `Ctrl+C`, `Ctrl+Z`, and `Ctrl+D`.
-
-Autocomplete scans:
-
-* The shell’s built-in command list
-* Executable files in directories listed under `PATH`
-* Files and directories in the current working directory
-
-Duplicate command suggestions are removed, multiple matches are sorted alphabetically, and the terminal prompt is redrawn without losing the partially entered command.
-
-### Phase 9: Persistent Command History
-
-Implemented command-history storage and interactive navigation across shell sessions.
-
-Features:
-
-* Stores a maximum of 20 commands
-* Overwrites the oldest entry when the limit is exceeded
-* Persists history across multiple shell sessions
-* Stores complete input lines before their execution
-* Supports editing and executing recalled commands
-
-Supported commands:
-
-```bash
-history
-history <num>
-```
-
-`history` displays up to the latest 10 commands, while `history <num>` displays the requested number of recent commands up to the 20-command storage limit.
-
-Example:
-
-```bash
-history
-history 5
-history 20
-```
-
-History is stored persistently in:
+Expected output:
 
 ```text
-<shell-home>/.mihirshell_history
+hello world
+<absolute-current-directory>
+True
 ```
 
-Arrow-key navigation is also supported:
+### Semicolon-separated commands
 
-* Up Arrow moves toward older commands.
-* Repeated Up Arrow stops at the oldest stored command.
-* Down Arrow moves toward newer commands after history navigation begins.
-* Moving beyond the latest entry restores the input originally typed before pressing Up.
-* Recalled commands can be modified using Backspace or additional input before execution.
+```bash
+echo first ; echo second ; pwd
+```
 
-The input line is redrawn after navigation without losing the dynamic shell prompt. Empty input is not stored, while commands such as `history` and `exit` are recorded as regular history entries.
+Expected output:
 
+```text
+first
+second
+<absolute-current-directory>
+```
+
+### Background process
+
+```bash
+sleep 2 &
+```
+
+Expected result: the PID is printed and the prompt returns immediately.
+
+### Redirection
+
+```bash
+echo hello > output.txt
+echo world >> output.txt
+cat < output.txt
+```
+
+Expected output:
+
+```text
+hello
+world
+```
+
+### Pipeline
+
+```bash
+echo hello | wc -c
+```
+
+Expected output:
+
+```text
+6
+```
+
+### Pipeline with redirection
+
+```bash
+echo banana > input.txt
+echo apple >> input.txt
+cat < input.txt | sort > sorted.txt
+cat sorted.txt
+```
+
+Expected output:
+
+```text
+apple
+banana
+```
+
+### History and autocomplete
+
+```bash
+history
+history 3
+```
+
+`history` displays at most 10 recent commands, while `history 3` displays the latest three. The shell stores at most 20 commands across sessions.
+
+Type part of a command or filename and press `Tab` to test autocomplete. Use the Up and Down arrow keys to navigate through history.
+
+### Signals
+
+Run:
+
+```bash
+sleep 100
+```
+
+- `Ctrl+C` interrupts the foreground process without terminating the shell.
+- `Ctrl+Z` stops the foreground process and returns control to the shell.
+- `Ctrl+D` exits the custom shell without closing the actual terminal.

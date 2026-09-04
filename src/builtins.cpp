@@ -3,12 +3,15 @@
 #include "parser.hpp"
 #include "shell.hpp"
 #include "ls.hpp"
+#include "pinfo.hpp"
+#include "search.hpp"
 
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <limits.h>
 #include <unistd.h>
+
 
 #define COMMAND_BUFFER_SIZE 4096
 #define ARGUMENT_BUFFER_SIZE 4096
@@ -19,6 +22,8 @@ static const char *BUILTIN_COMMANDS[] = {
     "echo",
     "ls",
     "history",
+    "search",
+    "pinfo",
     "exit"};
 
 static const int BUILTIN_COMMAND_COUNT =
@@ -513,6 +518,15 @@ int executeBuiltinCommand(char *command, Shell &shell)
     return 0;
   }
 
+  if (strcmp(commandName, "pinfo") == 0)
+{
+  return executePinfo(command, shell);
+}
+
+if (strcmp(commandName, "search") == 0)
+{
+  return executeSearch(command);
+}
   if (strcmp(commandName, "pwd") == 0)
   {
     char *extraArgument = strtok(NULL, " \t");

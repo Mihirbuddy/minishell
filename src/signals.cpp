@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstring>
 #include <unistd.h>
+#include <sys/wait.h>
 
 /*
  * Process group currently executing in the foreground.
@@ -45,15 +46,36 @@ static void handleForegroundSignal(int signalNumber)
       signalNumber);
 }
 
+static void handleChildSignal(int signalNumber)
+{
+  (void)signalNumber;
+
+  /*
+   * Do not collect children while a foreground command is running.
+   * Its status must be collected by the foreground waitpid().
+   */
+  if (foregroundProcessGroupId > 0)
+  {
+    return;
+  }
+
+  /*
+   * Collect every completed background child without blocking.
+   */
+  while (waitpid(-1, NULL, WNOHANG) > 0)
+  {
+  }
+}
 bool initializeSignalHandlers()
 {
   /*
-   * Save the process-group ID of the custom shell.
-   *
-   * We will use this later to return terminal control to it.
+   * Save the custom shell's process-group ID.
    */
   shellProcessGroupId = getpgrp();
 
+  /*
+   * Configure Ctrl+C and Ctrl+Z.
+   */
   struct sigaction action;
 
   memset(&action, 0, sizeof(action));
@@ -68,18 +90,12 @@ bool initializeSignalHandlers()
 
   action.sa_flags = 0;
 
-  /*
-   * Handle Ctrl+C in the custom shell.
-   */
   if (sigaction(SIGINT, &action, NULL) == -1)
   {
     perror("sigaction");
     return false;
   }
 
-  /*
-   * Handle Ctrl+Z in the custom shell.
-   */
   if (sigaction(SIGTSTP, &action, NULL) == -1)
   {
     perror("sigaction");
@@ -87,12 +103,8 @@ bool initializeSignalHandlers()
   }
 
   /*
-   * When the foreground program owns the terminal, our shell
-   * temporarily becomes a background process group.
-   *
-   * Later, the shell calls tcsetpgrp() to take the terminal back.
-   * Ignoring SIGTTOU prevents the OS from stopping the shell while
-   * it performs that operation.
+   * Ignore SIGTTOU so the shell can take terminal control back
+   * after a foreground program finishes.
    */
   struct sigaction ignoreAction;
 
@@ -109,6 +121,36 @@ bool initializeSignalHandlers()
   ignoreAction.sa_flags = 0;
 
   if (sigaction(SIGTTOU, &ignoreAction, NULL) == -1)
+  {
+    perror("sigaction");
+    return false;
+  }
+
+  /*
+   * Configure SIGCHLD for child-process state changes.
+   */
+  struct sigaction childAction;
+
+  memset(&childAction, 0, sizeof(childAction));
+
+  childAction.sa_handler = handleChildSignal;
+
+  if (sigemptyset(&childAction.sa_mask) == -1)
+  {
+    perror("sigemptyset");
+    return false;
+  }
+
+  /*
+   * SA_RESTART prevents a completed background process from
+   * destroying the command currently being typed.
+   *
+   * SA_NOCLDSTOP prevents SIGCHLD when Ctrl+Z merely stops a
+   * process. We only need notification when a child terminates.
+   */
+  childAction.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+
+  if (sigaction(SIGCHLD, &childAction, NULL) == -1)
   {
     perror("sigaction");
     return false;

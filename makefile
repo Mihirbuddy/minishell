@@ -14,7 +14,10 @@ SOURCES = src/main.cpp \
           src/pipeline.cpp \
           src/signals.cpp \
           src/input.cpp \
-          src/history.cpp
+          src/history.cpp \
+          src/search.cpp \
+          src/pinfo.cpp
+
 
 OBJECTS = $(SOURCES:.cpp=.o)
 
